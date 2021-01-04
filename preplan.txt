@@ -1,0 +1,20 @@
+command
+takeoff
+forward 50
+ccw 150
+cw 90
+forward 100
+ccw 90
+forward 80
+ccw 90
+forward 40
+ccw 90
+forward 40
+cw 90
+forward 60
+ccw 90
+forward 40
+ccw 150
+forward 50
+cw 180
+land
