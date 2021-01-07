@@ -11,7 +11,7 @@ if(APPLE)
 	set(CMAKE_SHARED_LIBRARY_SUFFIX ".so")
 	find_package(Boost REQUIRED COMPONENTS python27)
 elseif(LINUX)
-	find_package(Boost REQUIRED COMPONENTS "python")
+	find_package(Boost REQUIRED COMPONENTS "python2")
 endif(APPLE)
 
 

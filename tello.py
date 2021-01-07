@@ -7,7 +7,7 @@ import numpy as np
 class Tello:
     """Wrapper class to interact with the Tello drone."""
 
-    def __init__(self, local_ip, local_port, imperial=False, command_timeout=.3, tello_ip='192.168.10.1',
+    def __init__(self, local_ip, local_port, imperial = False, command_timeout=.3, tello_ip='192.168.10.1',
                  tello_port=8889):
         """
         Binds to the local IP/port and puts the Tello into command mode.
@@ -15,7 +15,7 @@ class Tello:
         :param local_ip (str): Local IP address to bind.
         :param local_port (int): Local port to bind.
         :param imperial (bool): If True, speed is MPH and distance is feet.
-                             If False, speed is KPH and distance is meters.
+                             If False, speed is KPH and distance is centimeters.
         :param command_timeout (int|float): Number of seconds to wait for a response to a command.
         :param tello_ip (str): Tello IP.
         :param tello_port (int): Tello port.
@@ -351,10 +351,10 @@ class Tello:
     def move(self, direction, distance):
         """Moves in a direction for a distance.
 
-        This method expects meters or feet. The Tello API expects distances
+        This method expects centimeters or feet. The Tello API expects distances
         from 20 to 500 centimeters.
 
-        Metric: .02 to 5 meters
+        Metric: 20 to 500 centimeters
         Imperial: .7 to 16.4 feet
 
         Args:
@@ -371,7 +371,7 @@ class Tello:
         if self.imperial is True:
             distance = int(round(distance * 30.48))
         else:
-            distance = int(round(distance * 100))
+            distance = int(round(distance))
 
         return self.send_command('%s %s' % (direction, distance))
 

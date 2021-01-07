@@ -1,7 +1,7 @@
 from PIL import Image
 from PIL import ImageTk
 import tkinter as tki
-from tkinter import Toplevel, Scale
+from tkinter import Toplevel, Scale, filedialog
 import threading
 import datetime
 import cv2
@@ -26,10 +26,10 @@ class TelloUI:
         self.outputPath = outputpath # the path that save pictures created by clicking the takeSnapshot button 
         self.frame = None  # frame read from h264decoder and used for pose recognition 
         self.thread = None # thread of the Tkinter mainloop
-        self.stopEvent = None  
+        self.stopEvent = None
         
         # control variables
-        self.distance = 0.1  # default distance for 'move' cmd
+        self.distance = 20  # default distance for 'move' cmd
         self.degree = 30  # default degree for 'cw' or 'ccw' cmd
 
         # if the flag is TRUE,the auto-takeoff thread will stop waiting for the response from tello
@@ -40,7 +40,12 @@ class TelloUI:
         self.panel = None
 
         # create buttons
-        self.btn_preplan = tki.Button(self.root, text="Preplan",
+        self.btn_preplan = tki.Button(self.root, text="Run Preplan",
+                                       command=self.runPreplanRoute)
+        self.btn_preplan.pack(side="bottom", fill="both",
+                               expand="yes", padx=10, pady=5)
+
+        self.btn_preplan = tki.Button(self.root, text="Load Preplan",
                                        command=self.loadPreplanRoute)
         self.btn_preplan.pack(side="bottom", fill="both",
                                expand="yes", padx=10, pady=5)
@@ -58,6 +63,10 @@ class TelloUI:
             self.root, text="Open Command Panel", relief="raised", command=self.openCmdWindow)
         self.btn_landing.pack(side="bottom", fill="both",
                               expand="yes", padx=10, pady=5)
+
+        # init preplan route config
+        self.route = []
+        self.is_running_preplan = False
         
         # start a thread that constantly pools the video sensor for
         # the most recently read frame
@@ -71,7 +80,7 @@ class TelloUI:
 
         # the sending_command will send command to tello every 5 seconds
         # self.sending_command_thread = threading.Thread(target = self._sendingCommand)
-        self.tello.send_command('command') 
+        self.tello.send_command('command')
     
     def videoLoop(self):
         """
@@ -190,9 +199,9 @@ class TelloUI:
         self.btn_landing.pack(side="bottom", fill="both",
                               expand="yes", padx=10, pady=5)
 
-        self.distance_bar = Scale(panel, from_=0.02, to=5, tickinterval=0.01, digits=3, label='Distance(m)',
-                                  resolution=0.01)
-        self.distance_bar.set(0.2)
+        self.distance_bar = Scale(panel, from_=2, to=500, tickinterval=1, digits=3, label='Distance(cm)',
+                                  resolution=1)
+        self.distance_bar.set(20)
         self.distance_bar.pack(side="left")
 
         self.btn_distance = tki.Button(panel, text="Reset Distance", relief="raised",
@@ -281,6 +290,9 @@ class TelloUI:
 
     def telloFlip_b(self):
         return self.tello.flip('b')
+    
+    def telloFlip(self, direction):
+        return self.tello.flip(direction)
 
     def telloCW(self, degree):
         return self.tello.rotate_cw(degree)
@@ -311,18 +323,18 @@ class TelloUI:
 
     def updateDistancebar(self):
         self.distance = self.distance_bar.get()
-        print('reset distance to %.2f' % self.distance)
+        print('reset distance to %d cm' % self.distance)
 
     def updateDegreebar(self):
         self.degree = self.degree_bar.get()
         print('reset degree to %d' % self.degree)
 
     def on_keypress_w(self, event):
-        print("up %.2f m" % self.distance)
+        print("up %d cm" % self.distance)
         self.telloUp(self.distance)
 
     def on_keypress_s(self, event):
-        print("down %.2f m" % self.distance)
+        print("down %d cm" % self.distance)
         self.telloDown(self.distance)
 
     def on_keypress_a(self, event):
@@ -330,23 +342,23 @@ class TelloUI:
         self.tello.rotate_ccw(self.degree)
 
     def on_keypress_d(self, event):
-        print("cw %.2f m" % self.degree)
+        print("cw %d degree" % self.degree)
         self.tello.rotate_cw(self.degree)
 
     def on_keypress_up(self, event):
-        print("forward %.2f m" % self.distance)
+        print("forward %d cm" % self.distance)
         self.telloMoveForward(self.distance)
 
     def on_keypress_down(self, event):
-        print("backward %.2f m" % self.distance)
+        print("backward %d cm" % self.distance)
         self.telloMoveBackward(self.distance)
 
     def on_keypress_left(self, event):
-        print("left %.2f m" % self.distance)
+        print("left %d cm" % self.distance)
         self.telloMoveLeft(self.distance)
 
     def on_keypress_right(self, event):
-        print("right %.2f m" % self.distance)
+        print("right %d cm" % self.distance)
         self.telloMoveRight(self.distance)
 
     def on_keypress_enter(self, event):
@@ -367,9 +379,53 @@ class TelloUI:
     
     def loadPreplanRoute(self):
         # todo:
-        self.tello.send_command('command')
+        filepath = filedialog.askopenfilename(initialdir = "./",title = "Select preplan route file",filetypes = (("text files","*.txt"),("all files","*.*")))
+        print(filepath)
+        f = open(filepath, "r")
+        raw = f.read()
+        commands = raw.split('\n')
+        self.route = commands
+        f.close()
 
-    def runPreplanRoute(self, route):
-        # todo: 
-        self.tello.send_command('command')  
-
+    def runPreplanRoute(self):
+        # todo:
+        if self.is_running_preplan:
+            print('[runPreplanRoute] Existing route is running...')
+            return
+        if self.route == None or len(self.route) == 0:
+            print('[runPreplanRoute] No route is loaded')
+            return
+        self.is_running_preplan = True
+        while len(self.route) > 0:
+            self.__command2method(self.route.pop(0))
+        print('runPreplanRoute done')
+        print(len(self.route))
+        self.is_running_preplan = False
+    
+    def __command2method(self, command):
+        params = command.split(' ')
+        switcher = {
+            "up": self.telloUp,
+            "down": self.telloDown,
+            "ccw": self.telloCCW,
+            "cw": self.telloCW,
+            "forward": self.telloMoveForward,
+            "backward": self.telloMoveBackward,
+            "left": self.telloMoveLeft,
+            "right": self.telloMoveRight,
+            "takeoff": self.telloTakeOff,
+            "land": self.telloLanding,
+            # "command": self.send_command,
+            "flip": self.telloFlip
+        }
+        # Get the function from switcher dictionary
+        func = switcher.get(params[0], lambda: "Invalid command")
+        # Execute the function
+        if params[0] == 'command':
+            self.tello.send_command('command')
+        elif params[0] == 'takeoff' or params[0] == 'land':
+            func()
+        elif params[0] == 'flip':
+            func(params[1])
+        else:
+            func(int(params[1]))
