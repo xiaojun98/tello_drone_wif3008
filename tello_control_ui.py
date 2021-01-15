@@ -27,6 +27,7 @@ class TelloUI:
         self.frame = None  # frame read from h264decoder and used for pose recognition 
         self.thread = None # thread of the Tkinter mainloop
         self.stopEvent = None
+        self.preplanRouteStopEvent = None
         
         # control variables
         self.distance = 20  # default distance for 'move' cmd
@@ -40,13 +41,18 @@ class TelloUI:
         self.panel = None
 
         # create buttons
+        self.btn_preplan_stop = tki.Button(self.root, text="Stop Preplan",
+                                       command=lambda: self.stopRunPreplanRoute())
+        self.btn_preplan_stop.pack(side="bottom", fill="both",
+                               expand="yes", padx=10, pady=5)
+
         self.btn_preplan = tki.Button(self.root, text="Run Preplan",
-                                       command=self.runPreplanRoute)
+                                       command=lambda: self.__runCommand(self.startRunPreplanRoute) )
         self.btn_preplan.pack(side="bottom", fill="both",
                                expand="yes", padx=10, pady=5)
 
         self.btn_preplan = tki.Button(self.root, text="Load Preplan",
-                                       command=self.loadPreplanRoute)
+                                       command=lambda: self.__runCommand(self.loadPreplanRoute))
         self.btn_preplan.pack(side="bottom", fill="both",
                                expand="yes", padx=10, pady=5)
         
@@ -60,7 +66,7 @@ class TelloUI:
                             expand="yes", padx=10, pady=5)
 
         self.btn_landing = tki.Button(
-            self.root, text="Open Command Panel", relief="raised", command=self.openCmdWindow)
+            self.root, text="Open Command Panel", relief="raised", command=lambda: self.__runCommand(self.openCmdWindow))
         self.btn_landing.pack(side="bottom", fill="both",
                               expand="yes", padx=10, pady=5)
 
@@ -172,7 +178,7 @@ class TelloUI:
         text1.pack(side="top")
 
         self.btn_landing = tki.Button(
-            panel, text="Land", relief="raised", command=self.telloLanding)
+            panel, text="Land", relief="raised", command=lambda: self.__runCommand(self.telloLanding))
         self.btn_landing.pack(side="bottom", fill="both",
                               expand="yes", padx=10, pady=5)
 
@@ -183,14 +189,14 @@ class TelloUI:
 
         # binding arrow keys to drone control
         self.tmp_f = tki.Frame(panel, width=100, height=2)
-        self.tmp_f.bind('<KeyPress-w>', self.on_keypress_w)
-        self.tmp_f.bind('<KeyPress-s>', self.on_keypress_s)
-        self.tmp_f.bind('<KeyPress-a>', self.on_keypress_a)
-        self.tmp_f.bind('<KeyPress-d>', self.on_keypress_d)
-        self.tmp_f.bind('<KeyPress-Up>', self.on_keypress_up)
-        self.tmp_f.bind('<KeyPress-Down>', self.on_keypress_down)
-        self.tmp_f.bind('<KeyPress-Left>', self.on_keypress_left)
-        self.tmp_f.bind('<KeyPress-Right>', self.on_keypress_right)
+        self.tmp_f.bind('<KeyPress-w>', lambda e: self.__runCommand(self.on_keypress_w))
+        self.tmp_f.bind('<KeyPress-s>', lambda e: self.__runCommand(self.on_keypress_s))
+        self.tmp_f.bind('<KeyPress-a>', lambda e: self.__runCommand(self.on_keypress_a))
+        self.tmp_f.bind('<KeyPress-d>', lambda e: self.__runCommand(self.on_keypress_d))
+        self.tmp_f.bind('<KeyPress-Up>', lambda e: self.__runCommand(self.on_keypress_up))
+        self.tmp_f.bind('<KeyPress-Down>', lambda e: self.__runCommand(self.on_keypress_down))
+        self.tmp_f.bind('<KeyPress-Left>', lambda e: self.__runCommand(self.on_keypress_left))
+        self.tmp_f.bind('<KeyPress-Right>', lambda e: self.__runCommand(self.on_keypress_right))
         self.tmp_f.pack(side="bottom")
         self.tmp_f.focus_set()
 
@@ -386,6 +392,15 @@ class TelloUI:
         commands = raw.split('\n')
         self.route = commands
         f.close()
+    
+    def startRunPreplanRoute(self):
+        self.preplanRouteStopEvent = threading.Event()
+        self.preplanRouteThread = threading.Thread(target=self.runPreplanRoute, args=())
+        self.preplanRouteThread.start()
+    
+    def stopRunPreplanRoute(self):
+        if self.preplanRouteStopEvent != None and self.preplanRouteThread.isAlive():
+            self.preplanRouteStopEvent.set()
 
     def runPreplanRoute(self):
         # todo:
@@ -396,11 +411,17 @@ class TelloUI:
             print('[runPreplanRoute] No route is loaded')
             return
         self.is_running_preplan = True
-        while len(self.route) > 0:
+        while len(self.route) > 0 and not self.preplanRouteStopEvent.is_set():
             self.__command2method(self.route.pop(0))
         print('runPreplanRoute done')
         print(len(self.route))
         self.is_running_preplan = False
+    
+    def __runCommand(self, command, *args):
+        if self.is_running_preplan:
+            print('* action abort, preplan is running...')
+        else:
+            command(*args)
     
     def __command2method(self, command):
         params = command.split(' ')
